@@ -1,0 +1,4 @@
+String gaz "donnees gaz [%s]" <siren> { serial ="/dev/ttyACM0" }
+
+String gazCapteur (mqtt) {mqtt=">[mosquitto:gazValue:state:*:DEFAULT]" }
+

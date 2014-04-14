@@ -1,0 +1,7 @@
+sitemap gaz label="Main Gaz"
+
+Frame label="gaz Value" {
+
+	Text item=gaz.state
+
+}
