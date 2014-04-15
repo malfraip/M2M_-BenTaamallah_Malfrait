@@ -1,0 +1,193 @@
+<html>
+    <head>
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <title>Master 2 PGI M2M – Rapport Projet Galiléo</title>
+        <style>
+            .conteneur{
+                text-align: center;
+            }
+            .code{
+                border: 1px #aaa solid; 
+                font-style: italic;
+                font-family: Courier New ;
+                color:Gray ;
+                text-align: left;
+                width: 350px;
+                height: auto;
+            }
+            .imgTitle{
+                font-family: Courier New ;
+            }
+        </style>
+    </head>
+    <body>
+        <h1 align="center">Master 2 PGI M2M – Rapport Projet Galiléo</h1>
+
+        <div class="conteneur">
+            <br /><br />
+            <h3>Ben Taamallah Sahnoun</h3>
+            <br />
+            <h3>Malfrait Pierrick</h3>
+            <br /><br />
+            <img src="img/ufrimag.gif" alt="imag logo" height="170" width="170" style="text-align:center">
+
+            <br />Année 2013-2014
+        </div>
+
+        <h2>1) Introduction :</h2>
+        Dans le cadre de notre formation en Master 2 Génie Informatique et de l’internet des objets, nous avons utiliser les cartes intel Galiléo avec un capteur de gaz MQX sensor. 
+        <br /> L’objectif de ce projet est de créer un système qui extrait les données depuis le capteur et les transfert vers un message broker installé sur la carte pour qu’il les transfert vers notre PC où les données vont être traitées, affichées et stoquées.
+
+
+        <h5> * Logiciels utilisés :</h5>
+
+        OpenHab : 187K  lignes de code<br />
+        Mosquitto : 44,6K lignes de code<br />
+        NodeJs : 1,86 Milliards de lignes de code<br />
+        Node-Red : 24,9K lignes de code<br />
+        MongoDB : 589K lignes de code
+
+
+        <h2>2) Première architecture</h2>
+
+        Dans un premier temps nous avons réalisé une première architecture, simple, dans laquelle tous les composants logiciels sont installé sur l’ordinateur, et la carte est relié en modbus usb avec ce dernier.<br />
+        On exécute un sketch Arduino, qui permet de renvoyer les données de notre capteur sur le port USB, ce qui nous donne l’architecture globale suivante:<br />
+
+        <div class="conteneur">
+            <img src="img/archi1_V2.jpg" alt="architecture 1" height="570" width="770">
+            <div class="imgTitle"> Architecture 1</div>
+        </div>
+
+        <h3>2.1) Sketck .ino</h3>
+        Pour récupérer les informations données par le capteur nous utilisons ce sketch :
+        <br /><br />
+        <div class="conteneur">
+            <div class="code">
+                int Gas_Sensors = A0; <br /> 
+                void setup() {<br />
+                Serial.begin(9600);<br />
+                }<br /><br />
+
+                void loop() {<br />
+                int sensorValue = analogRead(Gas_Sensors);    <br />             	 
+                Serial.print("Gas Sensors = " );      <br />            	 
+                Serial.println(sensorValue);<br />
+                delay(500);              <br />  	 
+                }
+            </div>
+        </div>
+        <br /><br />
+        (Pour plus d’explication : cf co2_sketch.ino)
+
+        <h3>2.2) Openab</h3>
+        Ainsi OpenHab renvoie les donnée reçu sur le serial USB (/dev/ttyACM0) qu’il publie sur mosquitto avec le topic : “gazValue”. (cf gaz.items)<br />
+
+        Et pour que cela soit possible nous avons rajouté un broker mosquitto avec sont url dans les fichiers de configuration de OpenHab. (cf openhab_default.cfg ligne 1110)<br />
+
+        Nous avons créé une petite page web sur OpenHab pour visualiser les valeurs reçues en temps réelle. (cf gaz.sitemap)<br />
+
+        <h3>2.3) Mosquitto</h3>
+        Pour la mise en place de Mosquito nous avons simplement installé ce dernier et lancé le démon mosquitto.
+
+        <h3>2.4) Node-Red</h3>
+        Node Red nous permet de faire le lien entre le protocole mqtt, nos commandes twitter et notre page web que Node-Red génère lui même.<br />
+
+        Voici le Node pour la prise en compte des publications mqtt sur le topic “gazValue” sous Node-Red : 
+
+        <div class="conteneur">
+            <img src="img/node-red_mongoDB_mqtt_node-resized.png" alt="node-red_mongoDB_mqtt_node" height="200" width="370">
+            <div class="imgTitle">Node pour la prise en compte des publications mqtt</div>
+
+        </div>
+
+        <h2>2) Deuxième architecture</h2>
+
+        Dans un deuxième temps nous avons voulu installer mosquitto et openHab sur notre carte Galileo. Cependant nous n’avons pas réussi à faire fonctionner OpenHab sur notre carte, donc nous l’avons remplacé par un broker MQtt.<br />
+        Dans cette architecture les données envoyés par le capteur sont récupérées par un script python qui lit sur Digital GPIO de la Galileo.<br />
+        Ce script sert aussi à publier la valeur du gaz, une fois elle a changé, la publication est faite par le message broker installé sur la carte vers le message broker installé sur l’ordinateur, qui va les transférer par la suite à RedNode. <br />
+        RedNode va s’occuper du stockage en BD de ces valeurs et de leurs affichage sur une page web en temps réel. 
+
+        <div class="conteneur">
+            <img src="img/archi2_V2.jpg" alt="architecture 2" height="570" width="770">
+            <div class="imgTitle">Architecture 2</div>
+        </div>
+
+
+        <h3>2.1) Mise en place d’un tunnel ssh :</h3>
+        Nous avons rencontré quelques problèmes dans cette phase, nous voulions fixé l’adresse ip de la carte pour cela nous avons tout d’abord pensé à configurer un serveur DHCP sur notre propre machine, cependant cela ne nous convenait pas.<br />
+        Nous avons ensuite voulu fixé l’adresse IP de la carte en modifiant la distribution de notre carte. Mais nous avons trouvé un moyen de fixé l’adresse de la carte, grâce au programme que nous pouvons flasher sur la carte :<br />
+        <br />
+        <div class="code">
+            void setup() {<br />
+            system("ifconfig eth0 169.254.1.1 netmask 255.255.0.0 up");<br />
+            system("route add default gw 192.168.1.2");<br />
+            }
+        </div><br />
+        Cette solution nous a permis de se connecter à la carte a travers telnet mais pas en ssh, car une fois que nous utilisons la distribution sur la carte SD, le sketch ne s’exécute plus. Donc nous sommes servit de l’outil Wireshark pour connaître l’adresse ip de la carte et se connecter en ssh par la suite.
+
+        <h3>2.2) Script Python</h3>
+        Nous avons mis en place d’un script Python pour récupérer les valeurs de notre capteur depuis la carte en utilisant les fonctions GPIO de Galileo, ces valeurs vont être envoyer par le mosquitto installé sur notre carte. 
+
+        <h3>2.3) Node-Red : Global</h3>
+
+        Avec les différentes utilisation de Node-Red avec la collecte des messages du topic MQTT et du renvoie de ces informations sur nos différents nodes nous obtenons le graphe Node-Red suivant  :<br /> 
+
+        <div class="conteneur">
+            <img src="img/nodered.png" alt="nodered" height="470" width="770">
+            <div class="imgTitle">Graphe Node-Red</div>
+
+        </div>
+
+        <br />Une exportation de ce graphique est présent dans le dépot et correspond au fichier : my_Node-Red.txt. Nous allons détailler ci-dessous les parties les plus important de notre Node-Red.
+
+
+        <h3>2.4) Node-Red : traitement des données</h3>
+        Dans les noeuds de Node-Red, nous pouvons introduire du code javascript, nous avons implémenter quelques fonctions pour : <br />
+        Traiter les données à afficher et à sauvegarder : des objets gazObject qui contiennent la valeur de gaz, et la date de cette valeur.<br />
+        Filter les tweets : récupération de la commande depuis le tweet.<br />
+        Créer un buffer de données et contrôle d’affichage.
+
+        <h3>2.5) Node-Red : affichage des données</h3>
+        Nous nous sommes servit de NodeRed pour afficher nos données sur une page web en temps réel, pour le faire nous avons créer un noeud ([get]/gaz) qui envoie un http request pour récupérer les valeurs, et un noeud (http out) http réponse qui va les afficher.<br />
+        Un noeud ([get]/dinamicgaz) contient du code Ajax pour rendre la page dynamique.<br /><br />
+
+        Les données affichées sont :<br />
+        Un message hello. <br />
+        La date et l’heure actuelle.<br />
+        La dernière valeur de gaz reçue et sa date et heure de réception.<br />
+        La dernière commande reçue et sa date de réception.
+
+        <h3>2.6) Node-Red : Mise en place de Tweet de contrôle et d'alerte</h3>
+        NodeRed est capable de lancer des tweets et d’en absorber aussi, du coup nous avons pensé à utiliser ces fonctionnalités pour activer et désactiver l’affichage des valeurs de gaz avec des tweets.<br />
+        Nous avons lié notre code nodeRed avec le compte tweeter (@sahaninoo) et nous avons implementer un noeud nodeRed qui va lire tous les tweets issus de ce compte.<br />
+        Un noeud (TwittFilter) va lire un tweet et va vérifier s’il s’agit d’une commande (tweet contenant  #gazProject), si c’est le cas, on regarde si il s’agit d’une commande start ou stop. <br />
+        Dans le cas d’un stop, un message va passer au noeud ‘Data Buffer’ qui va arrêter l’affichage des valeurs. Un tweet avec un start #gazProject va réactiver l’affichage.
+        <br />
+        Dans le cas où la valeur du gaz dépasse 500, on envoie un tweet sur le compte (@M2M_Galileo) en disant 'Attention valeur de gaz anormale : <valeur>'
+        <h3>2.7) Node-Red : Mise en place de mongoDB</h3>
+
+        Une des lacunes de notre système de récupération de donnée de capteur était que c’est dernières étaient simplement affiché en temps réelles mais aucune sauvegarde n’était réalisé sur un support persistent, c’est pour cela que nous avons ajouté une base de donnée (mongoDB).<br />
+
+        Nous avons commancé par installer mongoDB, pour cela il a fallu créé les dossier où mongoDB stoque les données (/data/db par défaut), puis lancé ./mongod pour initialiser mongoDB. Et nous avons enfin lancer le shell de mongoDB (./mongo) pour créer notre collection nommée gazValuecollection : db.createCollection("gazValuecollection").<br />
+
+        Cependant mongoDB n’est pas capable de gérer le protocole mqtt et donc de souscrire à notre topic pour les capteurs, pour cela nous avons utilisé un second logiciel : NodeRed qui lui ce charge de faire ce lien. <br />Cependant, il nous a fallu utilisé la version en développemet de NodeRed.js (clone du dépot gitHub) car seule cette version prenait en charge l'envoi de donnée vers une base de donnée mongoDB.<br />
+        Pour le stockage nous avons utilisé les objets gazObject qui contiennent les valeurs et leurs date de réception.<br />
+
+        Nous avons aussi dû configurer le fonction qui permet à NodeRed.js d’envoyer les données vers notre BD. Pour cela nous avons dû préciser l’adresse de notre serveur de base de donnée avec le port, ou encore le nom de la collection où l’on veut stocker les valeur de notre capteur :<br />
+
+        <div class="conteneur">
+            <img src="img/node-red_mongoDB_resized.png" alt="mongoDB node" height="200" width="370">
+            <div class="imgTitle">mongoDB node</div>
+        </div>
+
+        <br /> Une fois toutes ces opérations terminées nous pouvons vérifier que notre base de donnée enregistre bien les donnée envoyé par notre capteur, avec la commande find() sur la collection. Ce qui donne pour nous : db.gazValueCollection.find().
+
+
+        <h2>3) Conclusion</h2>
+
+        Ce projet nous a permis de voir les différentes technologies et techniques utilisées dans l’internet des choses. <br />Ainsi que les différents enjeux et utilisation des objets connectés que ce soit pour le confort, ou pour la gestion de risque et d’aide aux personnes.<br />
+
+        Cependant nous pouvons encore améliorer notre projet avec par exemple la création d’un historique du niveau de gaz, ou des alertes qui utiliseraient notre base de donnée, ou encore envoyer un tweet d’alerte si le niveau de gaz est trop élevé.
+
+    </body>
+</html>
